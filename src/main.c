@@ -369,7 +369,7 @@ void callback_RTC( RTCDRV_TimerID_t id, void * user )
             // Convert data into ASCII format
             processRTC_ASCII();
             processTOF_ASCII();
-            UARTDRV_Transmit(uart_handle, uart_tx_buffer, sizeof(uint8_t) * UART_TX_BUF_LENGTH, callback_UARTTX);
+            UARTDRV_Transmit(uart_handle, uart_tx_buffer, sizeof(uint8_t) * strlen(uart_tx_buffer), callback_UARTTX);
 
         #endif
 
@@ -392,8 +392,8 @@ void callback_RTC( RTCDRV_TimerID_t id, void * user )
 
     }
     else {
-        //spi_tx_buffer[0] = READ_INT_STAT_REG;
-        //MAX_SPI_TXRX(&spi_tx_buffer[0], &spi_rx_buffer[0]);
+        spi_tx_buffer[0] = READ_INT_STAT_REG;
+        MAX_SPI_TXRX(&spi_tx_buffer[0], &spi_rx_buffer[0]);
     }
 
 }
