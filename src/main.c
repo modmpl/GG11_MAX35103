@@ -141,10 +141,42 @@ void processTOF_ASCII();
  ******************************************************************************/
 void MAX_Init()
 {
-	spi_tx_buffer[0] = RESET;            // Initialize
-	MAX_SPI_TX(&spi_tx_buffer[0]);
+	//spi_tx_buffer[0] = RESET;            // Initialize
+	//MAX_SPI_TX(&spi_tx_buffer[0]);
 
-    /* ----- Begin configuration register setup ----- */
+    // ----- Begin configuration register setup ----- */
+
+	// we might not need set alarm, but we do it for the same with MAX board configuration
+	// for now, we set alarm time and RTC time is 0
+    spi_tx_config_buffer[0] = WRITE_RTC_SECS;
+    spi_tx_config_buffer[1] = 0x28;
+    spi_tx_config_buffer[2] = 0x45;
+    MAX_SPI_TX_Config(&spi_tx_config_buffer[0]);
+
+    spi_tx_config_buffer[0] = WRITE_RTC_MIN_HRS;
+    spi_tx_config_buffer[1] = 0x48;
+    spi_tx_config_buffer[2] = 0x14;
+    MAX_SPI_TX_Config(&spi_tx_config_buffer[0]);
+
+    spi_tx_config_buffer[0] = WRITE_RTC_DAY_DATE;
+    spi_tx_config_buffer[1] = 0x03;
+    spi_tx_config_buffer[2] = 0x25;
+    MAX_SPI_TX_Config(&spi_tx_config_buffer[0]);
+
+    spi_tx_config_buffer[0] = WRITE_RTC_M_Y;
+    spi_tx_config_buffer[1] = 0x09;
+    spi_tx_config_buffer[2] = 0x18;
+    MAX_SPI_TX_Config(&spi_tx_config_buffer[0]);
+
+    spi_tx_config_buffer[0] = WRITE_WD_ALARM_CNT;
+    spi_tx_config_buffer[1] = 0x00;
+    spi_tx_config_buffer[2] = 0x00;
+    MAX_SPI_TX_Config(&spi_tx_config_buffer[0]);
+
+    spi_tx_config_buffer[0] = WRITE_ALARM;
+    spi_tx_config_buffer[1] = 0x00;
+    spi_tx_config_buffer[2] = 0x00;
+    MAX_SPI_TX_Config(&spi_tx_config_buffer[0]);
 
     /***************************************************************************
      * TOF1 Register - basic operating parameters for TOF measurements
@@ -444,7 +476,7 @@ int main(void) {
 
     SPI_Init();
     UART_Init();
-    //MAX_Init();
+    MAX_Init();
     setupGPIOInt();
 
     // Initialization of RTCDRV driver
@@ -463,6 +495,13 @@ int main(void) {
         //uart_tx_buffer[34] = 0x0A;
     #endif
 
+    time_t rawtime;
+    struct tm * timeinfo;
+
+    time ( &rawtime );
+    timeinfo = gmtime ( &rawtime );
+    printf ( "Current local time and date: %s", asctime (timeinfo) );
+
     // Initial measurement
     spi_tx_buffer[0] = TOF_DIFF;
     MAX_SPI_TX(&spi_tx_buffer[0]);
@@ -471,7 +510,7 @@ int main(void) {
     MAX_SPI_TXRX(&spi_tx_buffer[0], &spi_rx_buffer[0]);
 
     // Start a periodic timer with 1000 millisecond timeout
-    RTCDRV_StartTimer( rtc_id, rtcdrvTimerTypePeriodic, 100, callback_RTC, NULL );
+    RTCDRV_StartTimer( rtc_id, rtcdrvTimerTypePeriodic, 1, callback_RTC, NULL );
 
 }
 
