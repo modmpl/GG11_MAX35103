@@ -134,7 +134,7 @@ char* cmd_bufferptr = (char*)&cmd_code;
 
 int i = 0;
 int cmd_flag = 0;
-
+int polling = 0;
 
 /* ----- RTC Declarations ----- */
 RTCDRV_TimerID_t rtc_id;
@@ -561,7 +561,7 @@ int main(void) {
 
 
 	if(uart_rx_buffer[0] == 'y'){
-	  sprintf(&uart_tx_buffer[0], "Enter Command: ");
+	  sprintf(&uart_tx_cmd_buffer[0], "Enter Command: ");
 	  UARTDRV_Transmit(uart_handle, uart_tx_cmd_buffer, strlen(uart_tx_cmd_buffer), callback_UARTTX);
 
 	  // Need this line at least once in main() to kick off the receive/callback chain
@@ -575,23 +575,28 @@ int main(void) {
     spi_tx_buffer[0] = READ_INT_STAT_REG;
     MAX_SPI_TXRX(&spi_tx_buffer[0], &spi_rx_buffer[0]);
 
+    while (1) {
     // Check for flags here with switch, or with interrupts?
-	switch(cmd_flag) {
-	    case 1: // init
+		switch(cmd_flag) {
+			case 1: // init
 
-		    break;
+				break;
 
-	    case 2: // poll
-	    	// Start a periodic timer with 1000 millisecond timeout
-	    	RTCDRV_StartTimer( rtc_id, rtcdrvTimerTypePeriodic, 1, callback_RTC, NULL );
-		    break;
+			case 2: // poll
+				// Start a periodic timer with 1000 millisecond timeout
+				if(polling == 0){
+					RTCDRV_StartTimer( rtc_id, rtcdrvTimerTypePeriodic, 1, callback_RTC, NULL );
+					polling = 1;
+				}
+				break;
 
-	    case 3: // quit
+			case 3: // quit
 
-			break;
+				break;
 
-	    default:
-		    break;
+			default:
+				break;
+		}
 	}
 }
 
