@@ -12,6 +12,7 @@
 
 #include "max_macros.h"
 #include "int_2hex.h"
+#include "string.h"
 #include <time.h>
 
 /* @var SAVE_HEX_DATA/SAVE_ASCII_DATA  Specifies format in which MAX data is transmitted */
@@ -63,6 +64,9 @@ DEFINE_BUF_QUEUE(EMDRV_UARTDRV_MAX_CONCURRENT_TX_BUFS, txBufferQueue);
 UARTDRV_HandleData_t uart_handleData;
 UARTDRV_Handle_t uart_handle = &uart_handleData;
 
+#define UART_RX_BUF_LENGTH 32
+#define UART_CMD_TX_BUF_LENGTH 64
+
 #ifdef SAVE_HEX_DATA
 
     #define UART_TX_BUF_LENGTH 12
@@ -84,7 +88,6 @@ UARTDRV_Handle_t uart_handle = &uart_handleData;
      *             uart_rx_buffer[10] RTC Seconds
      *             uart_rx_buffer[11] Delimiter
      ******************************************************************************/
-     uint32_t uart_tx_buffer[UART_TX_BUF_LENGTH];
      uint32_t delimiter = 0x00000020;
 
 #else
@@ -119,8 +122,19 @@ UARTDRV_Handle_t uart_handle = &uart_handleData;
      *             uart_tx_buffer[20]    '\t'
      *             uart_tx_buffer[21:39] TOF Diff
      ******************************************************************************/
-    uint8_t uart_tx_buffer[UART_TX_BUF_LENGTH];
+
 #endif
+
+uint8_t uart_rx_buffer[UART_RX_BUF_LENGTH];
+uint8_t uart_tx_buffer[UART_TX_BUF_LENGTH];
+uint8_t uart_tx_cmd_buffer[UART_CMD_TX_BUF_LENGTH];
+
+uint32_t cmd_code = '****';
+char* cmd_bufferptr = (char*)&cmd_code;
+
+int i = 0;
+int cmd_flag = 0;
+
 
 /* ----- RTC Declarations ----- */
 RTCDRV_TimerID_t rtc_id;
@@ -377,6 +391,45 @@ void callback_UARTRX(UARTDRV_Handle_t handle,
     (void)transferStatus;
     (void)data;
     (void)transferCount;
+
+    UARTDRV_Transmit(handle, data, 1, callback_UARTTX);
+
+      // Check for complete command
+      if(uart_rx_buffer[0] != '\n' && uart_rx_buffer[0] != '\r'){
+    	// Check for backspace
+    	if(uart_rx_buffer[0] == '\b'){
+    	  i--;
+    	}
+    	else {
+          cmd_bufferptr[i%4] = uart_rx_buffer[0];
+          i++;
+    	}
+      }
+      else {
+    	i = 0;
+
+    	// Parse commands
+    	switch(cmd_code) {
+    	  case 'tini':    // Commands are reversed because of little endian-ness
+    		cmd_flag = 1;
+    	    break;
+
+    	  case 'llop':
+    		cmd_flag = 2;
+    		break;
+
+    	  case 'tiuq':
+    		cmd_flag = 3;
+    		break;
+
+    	  default:
+    	    break;
+        }
+
+    	UARTDRV_Transmit(handle, uart_tx_buffer, strlen(uart_tx_buffer), callback_UARTTX);
+      }
+
+      UARTDRV_Receive(handle, uart_rx_buffer, 1, callback_UARTRX);
 }
 
 
@@ -495,12 +548,25 @@ int main(void) {
         //uart_tx_buffer[34] = 0x0A;
     #endif
 
-    time_t rawtime;
-    struct tm * timeinfo;
+    //time_t rawtime;
+    //struct tm * timeinfo;
+    //time ( &rawtime );
+    //timeinfo = gmtime ( &rawtime );
+    //printf ( "Current local time and date: %s", asctime (timeinfo) );
 
-    time ( &rawtime );
-    timeinfo = gmtime ( &rawtime );
-    printf ( "Current local time and date: %s", asctime (timeinfo) );
+	sprintf(&uart_tx_cmd_buffer[0], "Start program? (y/n): ");
+	UARTDRV_Transmit(uart_handle, uart_tx_cmd_buffer, strlen(uart_tx_cmd_buffer), callback_UARTTX);
+	UARTDRV_ReceiveB(uart_handle, uart_rx_buffer, 1);
+	UARTDRV_Transmit(uart_handle, uart_rx_buffer, 1, callback_UARTTX);    // Echo user input
+
+
+	if(uart_rx_buffer[0] == 'y'){
+	  sprintf(&uart_tx_buffer[0], "Enter Command: ");
+	  UARTDRV_Transmit(uart_handle, uart_tx_cmd_buffer, strlen(uart_tx_cmd_buffer), callback_UARTTX);
+
+	  // Need this line at least once in main() to kick off the receive/callback chain
+	  UARTDRV_Receive(uart_handle, uart_rx_buffer, 1, callback_UARTRX);
+	}
 
     // Initial measurement
     spi_tx_buffer[0] = TOF_DIFF;
@@ -509,9 +575,24 @@ int main(void) {
     spi_tx_buffer[0] = READ_INT_STAT_REG;
     MAX_SPI_TXRX(&spi_tx_buffer[0], &spi_rx_buffer[0]);
 
-    // Start a periodic timer with 1000 millisecond timeout
-    RTCDRV_StartTimer( rtc_id, rtcdrvTimerTypePeriodic, 1, callback_RTC, NULL );
+    // Check for flags here with switch, or with interrupts?
+	switch(cmd_flag) {
+	    case 1: // init
 
+		    break;
+
+	    case 2: // poll
+	    	// Start a periodic timer with 1000 millisecond timeout
+	    	RTCDRV_StartTimer( rtc_id, rtcdrvTimerTypePeriodic, 1, callback_RTC, NULL );
+		    break;
+
+	    case 3: // quit
+
+			break;
+
+	    default:
+		    break;
+	}
 }
 
 
